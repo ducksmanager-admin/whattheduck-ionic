@@ -2,7 +2,7 @@
     "apps": [
         {
             "appId": "c6dce202",
-            "dependencyInstallCommand": "git clone --recurse-submodules https://github.com/bperel/DucksManager . && npm i -g pnpm && pnpm i -r --prod -F '~whattheduck-ionic...'"
+            "dependencyInstallCommand": "git clone --recurse-submodules https://github.com/bperel/DucksManager dm && cd dm && npm i -g pnpm && pnpm i -r --prod -F '~whattheduck-ionic...'"
         }
     ]
 }
