@@ -2,15 +2,21 @@
   <List
     v-if="collectionStore.totalPerPublication && coaStore.issueCounts"
     :items="sortedItems"
-    :fill-percentages="ownershipPercentages"
     :get-target-route-fn="getTargetUrlFn"
     :get-item-text-fn="getItemTextFn"
   >
+    <template #fill-bar="{ item }" v-if="ownershipPercentages">
+      <ion-progress-bar :value="ownershipPercentages[item.publicationcode].ownershipPercentage || 0" />
+    </template>
     <template #row-label="{ item }">
-      <Publication v-bind="item" />
+      <Publication :key="item.publicationcode" :label="item.publicationname" />
     </template>
     <template #row-suffix="{ item }" v-if="ownershipPercentages">
-      {{ getOwnershipText(ownershipPercentages[item.publicationcode], false) }}
+      {{
+        ownershipPercentages[item.publicationcode]
+          ? getOwnershipText(ownershipPercentages[item.publicationcode], false)
+          : ''
+      }}
     </template>
   </List>
 </template>
@@ -19,7 +25,6 @@
 import { stores } from '~web';
 
 import { getOwnershipPercentages, getOwnershipText } from '~/composables/useOwnership';
-import router from '~/router';
 import { app } from '~/stores/app';
 import { wtdcollection } from '~/stores/wtdcollection';
 
@@ -43,19 +48,11 @@ const ownershipPercentages = computed(() => getOwnershipPercentages(totalPerPubl
 
 const route = useRoute();
 
-watch(
-  () => route.params.countrycode,
-  async (newValue) => {
-    appStore.currentNavigationItem = newValue as string;
-  },
-  { immediate: true },
-);
-
 const getItemTextFn = (item: (typeof items)['value'][0]['item']) => item.publicationname || item.publicationcode;
 
 const getTargetUrlFn = (key: string) => ({
   name: 'IssueList',
-  params: { type: route.params.type, countrycode: key.split('/')[0], magazinecode: key.split('/')[1] },
+  params: { type: route.params.type, publicationcode: key },
 });
 
 const items = computed(() =>
@@ -67,13 +64,17 @@ const items = computed(() =>
             key: publicationcode,
             item: { publicationcode, publicationname },
           }))
-      : collectionStore.ownedPublications
-          .filter((publication) => publication.indexOf(`${route.params.countrycode}/`) === 0)
+      : collectionStore
+          .ownedPublications!.filter(
+            (publicationcode) =>
+              publicationcode.indexOf(`${route.params.countrycode}/`) === 0 &&
+              coaStore.publicationNames![publicationcode],
+          )
           .map((publicationcode) => ({
             key: publicationcode,
             item: {
               publicationcode,
-              publicationname: coaStore.publicationNames?.[publicationcode] || publicationcode,
+              publicationname: coaStore.publicationNames![publicationcode] || publicationcode,
             },
           }))
     : [],
@@ -84,8 +85,4 @@ const sortedItems = computed(() =>
     text1.toLowerCase().localeCompare(text2.toLowerCase()),
   ),
 );
-
-collectionStore.fetchAndTrackCollection().catch(() => {
-  router.push('/');
-});
 </script>

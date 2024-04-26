@@ -1,113 +1,103 @@
 <template>
-  <ion-page>
-    <ion-item>
-      <ion-label>{{ t('Etat') }}</ion-label>
+  <ion-grid>
+    <ion-row>
+      <ion-col size="4" class="ion-padding">
+        <ion-label>{{ t('Etat') }}</ion-label></ion-col
+      >
+      <ion-col size="8" class="ion-padding">
+        <ion-row style="flex-direction: column" class="ion-align-items-end">
+          <checkbox-group-with-radio-behavior
+            :list="conditionsWithoutMissing"
+            v-model:id="issue.condition"
+            :getItemId="(item) => item.dbValue"
+            :getCheckboxColor="(item) => item.themeColor"
+          />
+          <ion-label>{{
+            conditionsWithoutMissing.find(({ dbValue }) => dbValue === issue.condition)?.label
+          }}</ion-label></ion-row
+        ></ion-col
+      >
+    </ion-row>
+    <ion-row>
+      <ion-col size="4" class="ion-padding">
+        <ion-label>{{ t('A lire') }}</ion-label></ion-col
+      >
+      <ion-col size="8" style="display: flex" class="ion-padding ion-justify-content-end"
+        ><ion-checkbox v-model="issue.isToRead" :aria-label="t('A lire')" /></ion-col
+    ></ion-row>
+    <ion-row>
+      <ion-col size="4" class="ion-padding">
+        <ion-label>{{ t("Date d'achat") }}</ion-label>
 
-      <ion-radio-group v-if="selectedCondition" :model-value="selectedCondition">
-        <ion-radio
-          v-for="condition of conditions"
-          :key="condition"
-          :class="`dm-condition-background ${condition}`"
-          :value="condition"
-          :aria-label="t(`condition_${condition}`)"
-        />
-      </ion-radio-group>
-    </ion-item>
-    <ion-item>
-      <ion-label>{{ t('A lire') }}</ion-label>
-      <ion-checkbox slot="end" v-model="issue.isToRead" :aria-label="t('A lire')" /> </ion-item
-    ><ion-item>
-      <ion-label>{{ t("Date d'achat") }}</ion-label>
-      <ion-list>
-        <ion-button>{{ t("Créer une date d'achat") }}</ion-button>
-        <ion-radio-group :model-value="issue.purchaseId" :value="issue.purchaseId" class="vertical">
-          <ion-list>
-            <ion-item>
-              <ion-radio :value="null" :aria-label="t('Pas de date d\'achat')" />
-              <div>
-                <ion-label>{{ t("Pas de date d'achat") }}</ion-label>
-              </div>
-            </ion-item>
-            <ion-item v-for="purchase of purchases">
-              <ion-radio :value="purchase.id" :aria-label="purchase.description" />
-              <div>
-                <ion-label>{{ purchase.date }}</ion-label>
-                <ion-label>{{ purchase.description }}</ion-label>
-              </div>
-            </ion-item>
-          </ion-list>
-        </ion-radio-group>
-      </ion-list>
-    </ion-item>
-  </ion-page>
+        <!-- TODO -->
+        <!-- <ion-button style="visibility: hidden" size="small">{{ t("Créer une date d'achat") }}</ion-button> -->
+      </ion-col>
+      <ion-col size="8" class="ion-padding ion-text-right">
+        <checkbox-group-with-radio-behavior
+          class="ion-text-right ion-padding-bottom vertical"
+          label-placement="start"
+          justify="end"
+          v-model:id="issue.purchaseId"
+          :list="purchasesIncludingNone"
+          :getItemId="(item) => item.id"
+        >
+          <template #default="{ item }">
+            <div
+              :style="{ fontStyle: item.id === null ? 'italic' : 'normal' }"
+              v-for="descriptionLine of item.dateAndDescription"
+            >
+              {{ descriptionLine }}
+            </div></template
+          ></checkbox-group-with-radio-behavior
+        ></ion-col
+      >
+    </ion-row></ion-grid
+  >
 </template>
 <script setup lang="ts">
-import type { Issue } from '~/persistence/models/dm/Issue';
-import { condition } from '~/stores/condition';
+import { type purchase, type issue } from '~prisma-clients/client_dm';
+
 import { wtdcollection } from '~/stores/wtdcollection';
-import { IssueWithPublicationcode } from '~dm-types/IssueWithPublicationcode';
-import { purchase } from '~prisma-clients/client_dm';
+import { SingleCopyState } from '~dm-types/CollectionUpdate';
 
 const { t } = useI18n();
-const route = useRoute();
+const issue = defineModel<SingleCopyState>({
+  required: true,
+});
 
-const conditionStore = condition();
+const { conditionsWithoutMissing } = useCondition();
 const collectionStore = wtdcollection();
 
 const purchases = computed(() => collectionStore.purchases);
-const conditions = computed(() => ['missing', ...Object.values(conditionStore.conditionL10n.map(({ en }) => en))]);
 
-const publicationcode = computed(() => `${route.params.countrycode}/${route.params.magazinecode}`);
-const issuecode = computed(() => `${publicationcode.value} ${route.params.issuenumber}`);
-const copyIndex = computed(() => parseInt(route.params.copyIndex as string) as number);
-const issue = computed(
-  () =>
-    collectionStore.issuesByIssueCode?.[issuecode.value!]?.[copyIndex.value!] ||
-    ({
-      purchaseId: null,
-    } as Issue),
-);
+const purchasesIncludingNone = computed(() => [
+  {
+    id: null,
+    dateAndDescription: [t("Pas de date d'achat")],
+  },
+  ...purchases.value!.map(({ id, date, description }) => ({
+    id,
+    dateAndDescription: [date.toLocaleDateString(), description],
+  })),
+]);
 
-const selectedCondition = ref(null as string | null);
 const selectedPurchase = ref(null as purchase | null);
 
 watch(
-  () => issue.value && collectionStore.purchases?.length,
-  (isReady) => {
-    if (isReady) {
-      const purchase = collectionStore.purchases?.find(({ id }) => id === issue.value.purchaseId) || null;
-      if (purchase) {
-        selectedPurchase.value = purchase;
+  issue,
+  () => {
+    if (issue.value) {
+      const thisPurchase = collectionStore.purchases?.find(({ id }) => id === issue.value.purchaseId) || null;
+      if (thisPurchase) {
+        selectedPurchase.value = thisPurchase;
       }
-      const newCondition = issue.value.condition;
-      selectedCondition.value = newCondition
-        ? conditionStore.conditionL10n.find(({ fr }) => fr === newCondition)?.en || 'none'
-        : 'none';
     }
   },
   { immediate: true },
 );
-
-collectionStore.loadCollection();
-collectionStore.loadPurchases();
 </script>
 
 <style scoped lang="scss">
-ion-radio::part(container) {
-  width: 30px;
-  height: 30px;
-
-  border-radius: 16px;
-  border: 2px solid #ddd;
-}
-
-ion-radio {
-  &::part(mark) {
-    width: 100%;
-    height: 100%;
-  }
-}
-
 ion-radio-group {
   display: flex;
 

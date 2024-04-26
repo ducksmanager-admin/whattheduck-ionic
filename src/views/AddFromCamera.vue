@@ -15,39 +15,38 @@
 import type { CameraPreviewOptions } from '@capacitor-community/camera-preview';
 import { CameraPreview } from '@capacitor-community/camera-preview';
 import { isPlatform } from '@ionic/vue';
-import axios from 'axios';
 import { apertureOutline, apertureSharp } from 'ionicons/icons';
 
-const getDataURIFromImageElement = () => {
-  const imageElement = document.getElementById('cover-mock') as HTMLImageElement;
+// const getDataURIFromImageElement = () => {
+//   const imageElement = document.getElementById('cover-mock') as HTMLImageElement;
 
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d');
+//   const canvas = document.createElement('canvas');
+//   const ctx = canvas.getContext('2d');
 
-  // Set the canvas size to match the image
-  canvas.width = imageElement!.width;
-  canvas.height = imageElement!.height;
+//   // Set the canvas size to match the image
+//   canvas.width = imageElement!.width;
+//   canvas.height = imageElement!.height;
 
-  // Draw the image on the canvas
-  ctx!.drawImage(imageElement!, 0, 0);
+//   // Draw the image on the canvas
+//   ctx!.drawImage(imageElement!, 0, 0);
 
-  return canvas.toDataURL();
-};
+//   return canvas.toDataURL();
+// };
 
-const dataURIToBlob = (dataURL: string) => {
-  const byteString = atob(dataURL.split(',')[1]);
+// const dataURIToBlob = (dataURL: string) => {
+//   const byteString = atob(dataURL.split(',')[1]);
 
-  const mimeType = dataURL.split(',')[0].split(':')[1].split(';')[0];
+//   const mimeType = dataURL.split(',')[0].split(':')[1].split(';')[0];
 
-  // Write the binary data to a typed array
-  const arrayBuffer = new ArrayBuffer(byteString.length);
-  const uint8Array = new Uint8Array(arrayBuffer);
-  for (let i = 0; i < byteString.length; i++) {
-    uint8Array[i] = byteString.charCodeAt(i);
-  }
+//   // Write the binary data to a typed array
+//   const arrayBuffer = new ArrayBuffer(byteString.length);
+//   const uint8Array = new Uint8Array(arrayBuffer);
+//   for (let i = 0; i < byteString.length; i++) {
+//     uint8Array[i] = byteString.charCodeAt(i);
+//   }
 
-  return new Blob([arrayBuffer], { type: mimeType });
-};
+//   return new Blob([arrayBuffer], { type: mimeType });
+// };
 
 function base64ToBlob(base64String: string) {
   const dataUrlPrefixIndex = base64String.indexOf(',');
@@ -91,12 +90,14 @@ const takePhoto = async () => {
   const blob = base64ToBlob(base64);
 
   data.append('image', blob);
-  const response = await axios.post('http://localhost:5000/search_image', data, {
+  const response = await fetch('http://localhost:5000/search_image', {
+    method: 'post',
+    body: data,
     headers: {
       'Content-Type': 'multipart/form-data',
     },
   });
-  console.log(response.data);
+  console.log(response.body);
 };
 </script>
 <style lang="scss" scoped>

@@ -1,215 +1,166 @@
 <template>
-  <ion-page>
+  <ion-page id="main-content">
+    <slot name="page-menu" v-if="$slots['page-menu']" />
     <ion-header :translucent="true">
       <ion-toolbar>
         <ion-buttons slot="start">
           <ion-menu-button color="primary" />
         </ion-buttons>
-        <ion-title>{{ title }}</ion-title>
+        <ion-title
+          ><div class="content">
+            <div class="title">
+              <div>{{ t('Ma collection') }}</div>
+              <ion-chip outline v-if="total !== undefined">{{ total }}</ion-chip>
+            </div>
+          </div></ion-title
+        >
       </ion-toolbar>
-      <Navigation />
-      <ion-searchbar v-if="showFilter" v-model="filterText" placeholder="Filter" />
+      <template v-if="items?.length">
+        <Navigation />
+        <ion-searchbar autocapitalize="sentences" v-if="showFilter" v-model="filterText" placeholder="Filter"
+      /></template>
     </ion-header>
 
-    <ion-content v-if="!filteredItems" ref="content">
+    <ion-content v-if="!items" ref="content">
       {{ t('Chargement de votre collection…') }}
     </ion-content>
-    <ion-content v-else ref="content" class="no-padding">
-      <Row
-        v-for="{ key, item, ownsNext } in filteredItems"
-        :fill-percentage="fillPercentages?.[key].ownershipPercentage"
-        :is-next-owned="ownsNext"
-        @click="onRowClick(key)"
-      >
-        <template #prefix v-if="item">
-          <slot name="row-prefix" :item="item" />
-        </template>
-        <template #label>
-          <slot name="row-label" :item="item" />
-        </template>
-        <template #suffix>
-          <slot name="row-suffix" :item="item" />
-        </template>
-      </Row>
+    <ion-content v-else-if="!items.length" ref="content">
+      {{ t('Votre collection est vide.') }}
+    </ion-content>
+    <ion-content
+      v-else
+      ref="content"
+      class="no-padding"
+      scroll-events
+      @ion-scroll="onScroll"
+      @ion-scroll-end="isScrolling = false"
+    >
+      <template v-if="$slots['row-label']">
+        <Row
+          v-for="{ key, item, isOwned, isNextOwned } in filteredItems"
+          :is-owned="isOwned"
+          :is-next-owned="isNextOwned"
+          @click="onRowClick(key)"
+        >
+          <template #fill-bar v-if="item">
+            <slot name="fill-bar" :item="item" />
+          </template>
+          <template #prefix v-if="item">
+            <slot name="row-prefix" :item="item" />
+          </template>
+          <template #label>
+            <slot name="row-label" :item="item" />
+          </template>
+          <template #suffix>
+            <slot name="row-suffix" :item="item" />
+          </template> </Row
+      ></template>
+      <slot v-else name="default" />
       <EditIssuesButton />
 
       <div
-        v-show="scrollPosition"
+        v-show="isScrolling"
         v-if="itemInCenterOfViewport"
         id="scroll-text"
         slot="fixed"
-        :style="{ top: scrollPosition + '%' }"
+        :style="{ top: `${scrollPositionPct}%` }"
       >
         {{ getItemTextFn(itemInCenterOfViewport) }}
-      </div>
-    </ion-content>
+      </div></ion-content
+    >
   </ion-page>
 </template>
 
 <script setup lang="ts" generic="Item extends Required<any>">
-import { IonContent } from '@ionic/vue';
-import { stores } from '~web';
-
-import type { OwnershipWithPercentage } from '~/composables/useOwnership';
+import { IonContent, ScrollDetail } from '@ionic/vue';
 import { app } from '~/stores/app';
 import { wtdcollection } from '~/stores/wtdcollection';
-
 defineSlots<{
+  'default'(): any;
+  'page-menu'(): any;
+  'fill-bar'(props: { item: Item }): any;
   'row-prefix'(props: { item: Item }): any;
   'row-label'(props: { item: Item }): any;
   'row-suffix'(props: { item: Item }): any;
 }>();
 
 const props = defineProps<{
-  items: { key: string; item: Item; ownsNext?: boolean }[];
+  items: { key: string; item: Item; isOwned?: boolean; isNextOwned?: boolean }[];
   getTargetRouteFn: (key: string) => Pick<RouteLocationNamedRaw, 'name' | 'params'>;
   getItemTextFn: (item: Item) => string;
-  fillPercentages?: Record<string, OwnershipWithPercentage>;
+  issueViewModes?: { label: string; icon: { ios: string; md: string } }[];
+  filter?: { label: string; icon: { ios: string; md: string } }[];
+}>();
+
+const emit = defineEmits<{
+  (e: 'items-filtered', items: string[]): void;
 }>();
 
 const content = ref<InstanceType<typeof IonContent> | null>(null);
-const scrollPosition = ref<number>(0);
 
-watch(
-  () => content.value,
-  async (newValue) => {
-    if (newValue) {
-      const scrollElement = await newValue.$el.getScrollElement()!;
-      setInterval(() => {
-        scrollPosition.value =
-          (100 * scrollElement.scrollTop) / (scrollElement.scrollHeight - scrollElement.clientHeight);
-      }, 100);
-    }
-  },
-  { immediate: true },
-);
+const scrollPositionPct = ref<number>(0);
+const isScrolling = ref(false);
+
+const onScroll = (e: CustomEvent<ScrollDetail>) => {
+  const scrollTop = e.detail.scrollTop;
+  isScrolling.value = e.detail.isScrolling;
+  const innerScrollElement = content.value!.$el.shadowRoot.querySelector('.inner-scroll');
+  const scrollHeight = innerScrollElement.scrollHeight;
+  const clientHeight = innerScrollElement.clientHeight;
+
+  const middleOfViewport = scrollTop + clientHeight / 2;
+
+  scrollPositionPct.value = (middleOfViewport / scrollHeight) * 100;
+};
 
 const { t } = useI18n();
 const router = useRouter();
 const route = useRoute();
 
-const collectionStore = wtdcollection();
-const coaStore = stores.coa();
-const appStore = app();
+const { total } = storeToRefs(wtdcollection());
+const { currentNavigationItem } = storeToRefs(app());
 const filterText = ref('' as string);
-const hasCoaData = ref(false);
 
 const itemInCenterOfViewport = computed(() => {
-  if (!props.items.length || !scrollPosition.value) {
+  if (!props.items.length) {
     return undefined;
   }
-  const itemIndex = Math.floor((scrollPosition.value * props.items.length) / 100);
+  const itemIndex = Math.floor((scrollPositionPct.value * props.items.length) / 100);
   return props.items[itemIndex].item;
 });
 
 const onRowClick = (key: string) => {
+  console.log(props.getTargetRouteFn(key));
   router.push({ ...props.getTargetRouteFn(key), query: { coa: route.query.coa } });
 };
-
-const hasList = computed((): boolean => {
-  if (!hasCoaData.value) {
-    return false;
-  }
-  switch (itemType.value) {
-    case 'Country':
-      return !!collectionStore.ownedCountries;
-    case 'Publication':
-      return !!collectionStore.ownedPublications /* &&
-          collectionStore.ownedPublications.filter((publicationCode) =>
-            Object.keys(coaStore.publicationNames).includes(publicationCode)
-          ).length === collectionStore.ownedPublications.length
-        )*/;
-    case 'Issue':
-      return !!collectionStore.issues && !!coaStore.issueNumbers[appStore.currentNavigationItem || ''];
-  }
-});
-
-const itemType = computed(() => {
-  switch (appStore.currentNavigationItem?.indexOf('/')) {
-    case undefined:
-      return 'Country';
-    case -1:
-      return 'Publication';
-    default:
-      return 'Issue';
-  }
-});
 
 const filteredItems = computed(() =>
   props.items.filter(({ item }) => props.getItemTextFn(item).toLowerCase().indexOf(filterText.value) !== -1),
 );
+
+watch(
+  filteredItems,
+  (items) => {
+    emit(
+      'items-filtered',
+      items.map(({ key }) => key),
+    );
+  },
+  { immediate: true },
+);
+
 const showFilter = computed(() => true);
 
-const title = computed(() =>
-  typeof collectionStore.total === 'number'
-    ? t('Ma collection ({issueCount} numéros)', { issueCount: collectionStore.total })
-    : t('Ma collection'),
-);
-
-const ownershipAllItems = computed(() => {
-  switch (itemType.value) {
-    case 'Country':
-      return [collectionStore.totalPerCountry, coaStore.issueCountsPerCountry!];
-    case 'Publication':
-      return [collectionStore.totalPerPublication, coaStore.issueCounts!];
+watch(currentNavigationItem, async (newValue) => {
+  if (newValue && /^[a-z]+\/[A-Z0-9]+ /.test(newValue)) {
+    router.push('/edit-issues');
   }
 });
-
-const ownership = computed(() =>
-  !ownershipAllItems.value?.length
-    ? undefined
-    : Object.entries(ownershipAllItems.value![0]!)
-        .map(([key, owned]) => ({ key, owned: owned as number, total: ownershipAllItems.value![1]![key] as number }))
-        .reduce<Record<string, [number, number]>>(
-          (acc, { key, owned, total }) => ({ ...acc, [key]: [owned, total] }),
-          {},
-        ),
-);
-
-watch(
-  () => itemType.value,
-  async (newValue) => {
-    hasCoaData.value = false;
-    await coaStore.fetchIssueCounts();
-    switch (newValue) {
-      case 'Country':
-        await coaStore.fetchCountryNames();
-        break;
-      case 'Publication':
-        await coaStore.fetchPublicationNames([appStore.currentNavigationItem || '']);
-        break;
-      case 'Issue':
-        await coaStore.fetchIssueNumbers([appStore.currentNavigationItem || '']);
-        break;
-    }
-    hasCoaData.value = true;
-  },
-  { immediate: true },
-);
-
-watch(
-  () => collectionStore.totalPerPublication,
-  async (newValue) => {
-    if (newValue) {
-      await coaStore.fetchPublicationNames(Object.keys(newValue));
-    }
-  },
-  { immediate: true },
-);
-
-watch(
-  () => appStore.currentNavigationItem,
-  async (newValue) => {
-    if (newValue && /^[a-z]+\/[A-Z0-9]+ /.test(newValue)) {
-      router.push('/edit-issues');
-    }
-  },
-);
 </script>
 
 <style scoped>
-img {
-  width: 18px;
+::v-deep(ion-content img) {
+  margin-right: 1rem;
 }
 strong {
   font-size: 20px;
@@ -238,5 +189,34 @@ ion-searchbar {
   color: black;
   background: white;
   z-index: 1000;
+}
+
+:deep(ion-label) {
+  z-index: 1;
+  display: flex !important;
+  align-items: center !important;
+  &.suffix {
+    color: grey;
+  }
+}
+:deep(ion-progress-bar) {
+  position: absolute;
+  height: 100%;
+
+  :deep(&::part(track)) {
+    background-color: transparent;
+    opacity: 0.2;
+  }
+}
+
+ion-title {
+  .title {
+    display: flex !important;
+    align-items: center;
+
+    ion-chip {
+      margin-left: 0.5rem;
+    }
+  }
 }
 </style>

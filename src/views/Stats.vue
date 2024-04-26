@@ -11,8 +11,8 @@
     <ion-content :fullscreen="true" v-if="wtdCollectionStore.issues">
       <ion-row style="height: 25vh" class="ion-text-center">
         <ion-row class="ion-text-center" style="height: 75%">
-          <ion-col size="4" class="text-big">{{ wtdCollectionStore.ownedCountries.length }}</ion-col
-          ><ion-col size="4" class="text-big">{{ wtdCollectionStore.ownedPublications.length }}</ion-col
+          <ion-col size="4" class="text-big">{{ wtdCollectionStore.ownedCountries!.length }}</ion-col
+          ><ion-col size="4" class="text-big">{{ wtdCollectionStore.ownedPublications!.length }}</ion-col
           ><ion-col size="4" class="text-big">{{ wtdCollectionStore.total }}</ion-col></ion-row
         >
         <ion-row class="ion-text-center" style="height: 25%">
@@ -44,7 +44,7 @@
           <template v-if="highestQuotedIssue">
             <ion-text>{{ t('Numéro le plus côté :') }}</ion-text>
             <ion-text>
-              <Condition :value="getConditionText(highestQuotedIssue.condition)" />
+              <Condition :value="highestQuotedIssue.condition" />
               {{ coaStore.publicationNames[highestQuotedIssue.publicationcode] }}
               {{ highestQuotedIssue.issuenumber }}</ion-text
             ></template
@@ -67,17 +67,17 @@
           >
           <PurchaseGraph :since="currentCollectionProgressionGraphType" :style="{ height: 'calc(100% - 140px)' }"
         /></ion-col>
-      </ion-row>
-    </ion-content>
-  </ion-page>
+      </ion-row> </ion-content
+  ></ion-page>
 </template>
 
 <script setup lang="ts">
 import { components } from '~web';
 import { coa } from '~web/src/stores/coa';
 
-import { conditionsWithoutMissing, getConditionText } from '~/composables/useCondition';
 import { wtdcollection } from '~/stores/wtdcollection';
+
+const { conditionsWithoutMissing } = useCondition();
 
 const ConditionsComponent = components['Conditions'];
 const { t } = useI18n();
@@ -101,9 +101,9 @@ const coaStore = coa();
 const numberPerCondition = computed(() => wtdCollectionStore.numberPerCondition);
 const highestQuotedIssue = computed(() => wtdCollectionStore.highestQuotedIssue);
 
-wtdCollectionStore.loadCollection().then(() => {
-  coaStore.fetchIssueQuotations(wtdCollectionStore.ownedPublications);
-});
+(async () => {
+  coaStore.fetchIssueQuotations(wtdCollectionStore.ownedPublications!);
+})();
 </script>
 
 <style lang="scss" scoped>

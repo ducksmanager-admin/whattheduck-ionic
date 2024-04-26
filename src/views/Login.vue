@@ -1,16 +1,11 @@
 <template>
-  <ion-page v-if="showForm">
-    <ion-header>
-      <ion-title>{{ t('Connexion') }}</ion-title>
+  <ion-page v-show="token === null">
+    <ion-header :translucent="true">
+      <ion-toolbar>
+        <ion-title>{{ t('Connexion') }}</ion-title>
+      </ion-toolbar>
     </ion-header>
     <ion-content>
-      <ion-item v-if="isOfflineMode">
-        <ion-label>{{
-          t(
-            'La connexion à votre compte DucksManager a échoué, vérifiez que votre connexion Internet est active. Vous pourrez consulter votre collection hors-ligne une fois que votre collection sera synchronisée.',
-          )
-        }}</ion-label>
-      </ion-item>
       <ion-row>
         <ion-col>
           <ion-input
@@ -39,7 +34,7 @@
             :error-text="
               errorTexts.password ||
               t(
-                'La connexion à votre compte DucksManager a échoué, vérifiez que votre connexion Internet est active. Vous pourrez consulter votre collection hors-ligne une fois que votre collection sera synchronisée.',
+                'La connexion à DucksManager a échoué, vérifiez que votre connexion Internet est active. Vous pourrez consulter votre collection hors-ligne une fois que votre collection sera synchronisée.',
               )
             "
             :aria-label="t('Mot de passe')"
@@ -83,28 +78,20 @@
           )
         }}</a>
       </ion-button>
-    </ion-footer>
-  </ion-page>
+    </ion-footer></ion-page
+  >
 </template>
 
 <script lang="ts" setup>
 import { SplashScreen } from '@capacitor/splash-screen';
 import { eyeOutline, eyeOffOutline, eyeSharp, eyeOffSharp } from 'ionicons/icons';
-import { stores } from '~web';
 
 import useFormErrorHandling from '~/composables/useFormErrorHandling';
-import { InducksIssuequotation } from '~/persistence/models/coa/InducksIssuequotation';
-import { User } from '~/persistence/models/dm/User';
 import { app } from '~/stores/app';
 import { wtdcollection } from '~/stores/wtdcollection';
-import { AxiosError } from 'axios';
 
-const isOfflineMode = ref(false);
-
-const appStore = app();
+const { token } = storeToRefs(app());
 const collectionStore = wtdcollection();
-
-const coaStore = stores.coa();
 
 const dmUrl = import.meta.env.VITE_DM_URL as string;
 
@@ -115,16 +102,9 @@ const router = useRouter();
 const username = ref('' as string);
 const password = ref('' as string);
 
-const showForm = ref(false);
-
 const showPassword = ref(false);
 
-const token = ref(null as string | null);
-
-const { validInputs, invalidInputs, touchedInputs, errorTexts, showError, clearErrors } = useFormErrorHandling([
-  'username',
-  'password',
-]);
+const { validInputs, invalidInputs, touchedInputs, errorTexts } = useFormErrorHandling(['username', 'password']);
 
 const forgotPassword = () => {
   router.push('/forgot');
@@ -140,76 +120,22 @@ const submitLogin = async () => {
     (newToken: string) => {
       token.value = newToken;
     },
-    (e: AxiosError) => {
-      showError(e);
+    (e) => {
+      errorTexts.value['password'] = e;
     },
   );
 };
 
-watch(
-  () => token.value,
-  async () => {
-    if (token.value) {
-      await appStore.dbInstance.getRepository(User).save({ username: username.value, token: token.value });
-      router.push('/collection');
-    }
-  },
-  { immediate: true },
-);
-
-watch(
-  () => showForm.value,
-  async (value) => {
-    if (value) {
-      await SplashScreen.hide();
-    }
-  },
-);
-
-watch(
-  () => collectionStore.issues,
-  async (value) => {
-    if (value) {
-      await collectionStore.loadPurchases();
-    }
-  },
-  { immediate: true },
-);
-
-watch(
-  () => collectionStore.ownedPublications,
-  async (newValue) => {
-    if (newValue) {
-      await coaStore.fetchIssueQuotations(collectionStore.ownedPublications);
-    }
-  },
-  { immediate: true },
-);
-
-watch(
-  () => app().isOfflineMode,
-  (isOfflineMode) => {
-    if (isOfflineMode) {
-      showForm.value = true;
-    }
-  },
-);
+watch(token, async () => {
+  if (token.value === null) {
+    await SplashScreen.hide();
+  }
+});
 
 (async () => {
   await SplashScreen.show({
     autoHide: true,
   });
-
-  try {
-    await collectionStore
-      .fetchAndTrackCollection()
-      .catch(() => {
-        showForm.value = true;
-      })
-      .then(() => router.push('/collection'));
-  } catch (e) {
-    showForm.value = true;
-  }
 })();
 </script>
 

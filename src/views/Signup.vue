@@ -1,16 +1,9 @@
 <template>
-  <ion-page v-if="showForm">
+  <ion-page>
     <ion-header>
       <ion-title>{{ t('Inscription') }}</ion-title>
     </ion-header>
     <ion-content>
-      <ion-item v-if="isOfflineMode">
-        <ion-label>{{
-          t(
-            'La connexion à votre compte DucksManager a échoué, vérifiez que votre connexion Internet est active. Vous pourrez consulter votre collection hors-ligne une fois que votre collection sera synchronisée.',
-          )
-        }}</ion-label>
-      </ion-item>
       <ion-item>
         <ion-input
           v-model="username"
@@ -48,7 +41,7 @@
           }"
           :error-text="
             t(
-              'La connexion à votre compte DucksManager a échoué, vérifiez que votre connexion Internet est active. Vous pourrez consulter votre collection hors-ligne une fois que votre collection sera synchronisée.',
+              'La connexion à DucksManager a échoué, vérifiez que votre connexion Internet est active. Vous pourrez consulter votre collection hors-ligne une fois que votre collection sera synchronisée.',
             )
           "
           :aria-label="t('Mot de passe')"
@@ -93,22 +86,18 @@
           {{ t('Annuler') }}
         </ion-button>
       </ion-item>
-    </ion-content>
-  </ion-page>
+    </ion-content></ion-page
+  >
 </template>
 
 <script lang="ts" setup>
-import { AxiosError } from 'axios';
 import { eyeOutline, eyeOffOutline, eyeSharp, eyeOffSharp } from 'ionicons/icons';
 
 import useFormErrorHandling from '~/composables/useFormErrorHandling';
-import { User } from '~/persistence/models/dm/User';
 import { app } from '~/stores/app';
 import { wtdcollection } from '~/stores/wtdcollection';
 
-const isOfflineMode = ref(false);
-
-const appStore = app();
+const { token } = storeToRefs(app());
 
 const collectionStore = wtdcollection();
 
@@ -128,12 +117,8 @@ const email = ref('' as string);
 const password = ref('' as string);
 const passwordConfirmation = ref('' as string);
 
-const showForm = ref(false);
-
 const showPassword = ref(false);
 const showPasswordConfirmation = ref(false);
-
-const token = ref(null as string | null);
 
 const cancelSignup = () => {
   router.push('/');
@@ -153,20 +138,9 @@ const submitSignup = async () => {
     (newToken: string) => {
       token.value = newToken;
     },
-    (e: AxiosError) => {
+    (e) => {
       showError(e);
     },
   );
 };
-
-watch(
-  () => token.value,
-  async () => {
-    if (token.value) {
-      await appStore.dbInstance.getRepository(User).save({ username: username.value, token: token.value });
-      router.push('/collection');
-    }
-  },
-  { immediate: true },
-);
 </script>

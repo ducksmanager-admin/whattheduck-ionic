@@ -35,9 +35,11 @@
 </template>
 
 <script setup lang="ts">
-import axios from 'axios';
-import { POST__auth__forgot } from '~api-routes';
-import { call } from '~axios-helper';
+import { dmSocketInjectionKey } from '~web/src/composables/useDmSocket';
+
+const {
+  auth: { services: authServices },
+} = injectLocal(dmSocketInjectionKey)!;
 
 const { t } = useI18n();
 
@@ -49,7 +51,7 @@ const email = ref('' as string);
 const showConfirmation = ref(false);
 
 const submitForgot = async () => {
-  await call(axios, new POST__auth__forgot({ reqBody: { email: email.value } }));
+  await authServices.requestTokenForForgotPassword(email.value);
   showConfirmation.value = true;
 };
 </script>

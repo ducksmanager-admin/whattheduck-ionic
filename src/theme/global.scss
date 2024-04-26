@@ -24,6 +24,20 @@ ion-content {
 
 ion-searchbar {
   padding-inline-start: 0 !important;
+  min-height: initial !important;
+}
+
+ion-button {
+  &::part(native) {
+    min-height: initial;
+    padding: .5rem;
+  }
+}
+
+ion-segment-button {
+  ion-label {
+    justify-content: center;
+  }
 }
 
 .dm-condition-background {
@@ -49,5 +63,27 @@ ion-searchbar {
         }
       }
     }
+  }
+}
+
+.toast-error {
+  text-align: center;
+  opacity: .85;
+  &::part(container) {
+    background: #db663b;
+    color: white
+  }
+}
+
+ion-fab-list {
+  right: 0;
+  align-items: end;
+
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 1rem;
+
+  ion-item {
+    background: inherit;
+    width: 100%;
   }
 }
